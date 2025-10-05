@@ -5,7 +5,7 @@
 
 ## 🌲 Overview
 
-Forest Sentinel is a real-time forest risk monitoring system that uses satellite data from NASA and ESA to detect and predict forest fires, deforestation, and ecological threats. The system works through clouds using Sentinel-1 SAR technology and provides 7-day risk forecasts.
+Forest Sentinel is a real-time forest risk monitoring system that uses satellite data from NASA and ESA to detect and predict forest fires, deforestation, and ecological threats. The system works through clouds using Sentinel-1 SAR technology and provides 7-day risk forecasts. This project has been created as part of NASA Space Apps Hackathon!!
 
 ## ✨ Key Features
 
