@@ -1,9 +1,19 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as ee from '@google/earthengine';
 import axios from 'axios';
+import Anthropic from '@anthropic-ai/sdk';
 
 // Check if we're in production mode
 const isProduction = process.env.NODE_ENV === 'production';
+
+// Initialize Anthropic client for LLM-based risk analysis
+let anthropicClient: Anthropic | null = null;
+if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key_here') {
+  anthropicClient = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  });
+  console.log('✅ Anthropic Claude client initialized');
+}
 
 // Validate required API keys for production
 const validateProductionKeys = () => {
@@ -142,14 +152,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       getRealFirmsData(location),
       getRealWeatherData(location)
     ]);
-    
-    // Calculate risk score
-    const riskAnalysis = calculateRisk({
+
+    // Try LLM-based risk analysis first, fallback to rule-based
+    const satelliteData = {
       sar: sarData,
       modis: modisData,
       firms: firmsData,
       weather: weatherData
-    });
+    };
+
+    const llmRiskAnalysis = await analyzeLLMRisk(satelliteData, location);
+    const riskAnalysis = llmRiskAnalysis || calculateRisk(satelliteData);
     
     // Generate forecast
     const forecast = generateForecast(riskAnalysis, weatherData);
@@ -736,28 +749,201 @@ function calculateDroughtIndex(weatherData: any) {
   return Math.min(index, 5);
 }
 
+// LLM-based intelligent risk analysis using Claude Sonnet 4.0
+async function analyzeLLMRisk(data: any, location: any) {
+  if (!anthropicClient) {
+    console.log('⚠️ Anthropic API not configured, using rule-based analysis');
+    return null;
+  }
+
+  try {
+    console.log('🤖 Using Claude Sonnet 4.0 for intelligent risk analysis...');
+
+    const prompt = `You are a wildfire risk assessment expert analyzing satellite data for forest monitoring. Analyze the following real-time satellite and weather data to assess wildfire risk.
+
+Location: ${location.name}
+Coordinates: ${location.lat.toFixed(4)}°, ${location.lon.toFixed(4)}°
+
+SATELLITE DATA:
+1. NASA FIRMS Fire Detection:
+   - Active fires detected: ${data.firms.count}
+   - Data source: ${data.firms.dataSource}
+
+   Fire Activity Scoring (0-40 points):
+   * Fire count > 10 = 40 points (Active wildfire event)
+   * Fire count 6-10 = 30 points (Major fire activity)
+   * Fire count 3-5 = 20 points (Moderate fire activity)
+   * Fire count 1-2 = 10 points (Isolated fires)
+   * Fire count 0 = 0 points (No fires)
+
+2. MODIS Vegetation Health:
+   - NDVI (Normalized Difference Vegetation Index): ${data.modis.ndvi.toFixed(3)}
+   - EVI (Enhanced Vegetation Index): ${data.modis.evi.toFixed(3)}
+   - Current health status: ${data.modis.health}
+   - Data source: ${data.modis.dataSource}
+
+   Vegetation Stress Scoring (0-25 points):
+   * NDVI < 0.2 = 25 points (Dead/dying vegetation - extreme fire fuel)
+   * 0.2 ≤ NDVI < 0.4 = 20 points (Stressed vegetation - high fire fuel)
+   * 0.4 ≤ NDVI < 0.6 = 10 points (Moderate health - some fire risk)
+   * NDVI ≥ 0.6 = 5 points (Healthy vegetation - low fire risk)
+
+3. Sentinel-1 SAR (Structural Analysis):
+   - VV polarization: ${data.sar.vv.toFixed(2)} dB
+   - VH polarization: ${data.sar.vh.toFixed(2)} dB
+   - VH/VV ratio: ${data.sar.vhVvRatio.toFixed(2)} dB
+   - Coherence: ${data.sar.coherence.toFixed(2)}
+   - Data source: ${data.sar.dataSource}
+
+   SAR VH/VV Ratio Interpretation for Structural Change Scoring (0-25 points):
+   * VH/VV < -8 dB = 25 points (Major structural change - clear-cutting/severe damage)
+   * -8 dB ≤ VH/VV < -6 dB = 20 points (Moderate disturbance - logging/thinning detected)
+   * -6 dB ≤ VH/VV < -4 dB = 10 points (Minor changes - selective logging)
+   * VH/VV ≥ -4 dB = 5 points (Intact forest structure)
+
+4. Weather Conditions:
+   - Temperature: ${data.weather.temperature.toFixed(1)}°C
+   - Humidity: ${data.weather.humidity}%
+   - Wind speed: ${data.weather.windSpeed.toFixed(1)} km/h
+   - Wind direction: ${data.weather.windDirection}
+   - Precipitation: ${data.weather.precipitation} mm
+   - Drought index: ${data.weather.droughtIndex}
+   - Data source: ${data.weather.dataSource}
+
+   Weather Conditions Scoring (0-30 points):
+   * Humidity < 20% AND Wind > 30 km/h = 30 points (Red Flag conditions - extreme fire weather)
+   * Humidity < 30% AND Wind > 20 km/h = 25 points (Critical fire weather)
+   * Humidity < 40% = 15 points (Elevated fire risk from dry conditions)
+   * Normal conditions = 5 points
+
+TASK:
+Provide a comprehensive wildfire risk assessment with the following JSON structure:
+
+{
+  "overallRiskScore": <number 0-100>,
+  "riskLevel": "<EXTREME|HIGH|MODERATE|LOW>",
+  "confidenceLevel": <number 0-100, based on data quality and consistency>,
+  "factors": {
+    "fireActivity": {
+      "score": <number 0-40>,
+      "reasoning": "<brief explanation>"
+    },
+    "vegetationStress": {
+      "score": <number 0-25>,
+      "reasoning": "<brief explanation>"
+    },
+    "weatherConditions": {
+      "score": <number 0-30>,
+      "reasoning": "<brief explanation>"
+    },
+    "structuralChange": {
+      "score": <number 0-25>,
+      "reasoning": "<brief explanation>"
+    }
+  },
+  "overallAnalysis": "<2-3 sentence comprehensive assessment>",
+  "confidenceReasoning": "<1-2 sentences explaining confidence level based on data sources and quality>"
+}
+
+GUIDELINES:
+- Risk levels: EXTREME (≥70), HIGH (50-69), MODERATE (30-49), LOW (<30)
+- Consider data source reliability (real > demo/fallback)
+- Factor in data consistency across different sensors
+- Confidence should reflect data quality, freshness, and cross-validation
+- Be cautious with demo/fallback data (lower confidence)
+- Provide actionable, scientifically-grounded assessments
+
+Return ONLY the JSON object, no additional text.`;
+
+    const message = await anthropicClient.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      messages: [{
+        role: 'user',
+        content: prompt
+      }]
+    });
+
+    const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
+
+    // Extract JSON from response (handle markdown code blocks or raw JSON)
+    let jsonText = responseText.trim();
+
+    // Remove markdown code blocks if present
+    const codeBlockMatch = jsonText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (codeBlockMatch) {
+      jsonText = codeBlockMatch[1].trim();
+    }
+
+    // Remove any leading/trailing text that's not part of JSON
+    const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonText = jsonMatch[0];
+    }
+
+    let analysis;
+    try {
+      analysis = JSON.parse(jsonText);
+    } catch (parseError) {
+      console.error('❌ JSON parsing failed. Raw response:', responseText);
+      console.error('Extracted JSON text:', jsonText);
+      throw new Error(`Failed to parse LLM response as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+    }
+
+    console.log('✅ LLM risk analysis completed:', {
+      score: analysis.overallRiskScore,
+      level: analysis.riskLevel,
+      confidence: analysis.confidenceLevel
+    });
+
+    return {
+      score: analysis.overallRiskScore,
+      level: analysis.riskLevel,
+      confidence: analysis.confidenceLevel,
+      factors: {
+        fireActivity: analysis.factors.fireActivity.score,
+        vegetationStress: analysis.factors.vegetationStress.score,
+        weatherConditions: analysis.factors.weatherConditions.score,
+        structuralChange: analysis.factors.structuralChange.score
+      },
+      reasoning: {
+        fireActivity: analysis.factors.fireActivity.reasoning,
+        vegetationStress: analysis.factors.vegetationStress.reasoning,
+        weatherConditions: analysis.factors.weatherConditions.reasoning,
+        structuralChange: analysis.factors.structuralChange.reasoning,
+        overall: analysis.overallAnalysis,
+        confidenceExplanation: analysis.confidenceReasoning
+      },
+      timestamp: new Date().toISOString(),
+      analysisMethod: 'llm'
+    };
+  } catch (error) {
+    console.error('❌ LLM risk analysis failed:', error);
+    return null;
+  }
+}
+
 function calculateRisk(data: any) {
   const factors = {
     fireActivity: 0,
     vegetationStress: 0,
     weatherConditions: 0,
-    structuralChange: 0,
-    accessibility: 5
+    structuralChange: 0
   };
-  
+
   // Fire activity (0-40 points)
   const fireCount = data.firms.count;
   if (fireCount > 10) factors.fireActivity = 40;
   else if (fireCount > 5) factors.fireActivity = 30;
   else if (fireCount > 2) factors.fireActivity = 20;
   else if (fireCount > 0) factors.fireActivity = 10;
-  
+
   // Vegetation stress (0-25 points)
   if (data.modis.ndvi < 0.2) factors.vegetationStress = 25;
   else if (data.modis.ndvi < 0.4) factors.vegetationStress = 20;
   else if (data.modis.ndvi < 0.6) factors.vegetationStress = 10;
   else factors.vegetationStress = 5;
-  
+
   // Weather conditions (0-30 points)
   if (data.weather.humidity < 20 && data.weather.windSpeed > 30) {
     factors.weatherConditions = 30;
@@ -768,28 +954,29 @@ function calculateRisk(data: any) {
   } else {
     factors.weatherConditions = 5;
   }
-  
+
   // Structural change from SAR (0-25 points)
   const vhVvRatio = data.sar.vhVvRatio;
   if (vhVvRatio < -8) factors.structuralChange = 25;
   else if (vhVvRatio < -6) factors.structuralChange = 20;
   else if (vhVvRatio < -4) factors.structuralChange = 10;
   else factors.structuralChange = 5;
-  
+
   const totalScore = Object.values(factors).reduce((a, b) => a + b, 0);
-  
+
   let level;
   if (totalScore >= 70) level = 'EXTREME';
   else if (totalScore >= 50) level = 'HIGH';
   else if (totalScore >= 30) level = 'MODERATE';
   else level = 'LOW';
-  
+
   return {
     score: totalScore,
     level,
     factors,
     confidence: Math.min(95, 70 + fireCount * 2),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    analysisMethod: 'rule-based'
   };
 }
 

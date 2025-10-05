@@ -9,6 +9,7 @@
     "deploy": "vercel --prod"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
     "@google/earthengine": "^0.1.419",
     "@radix-ui/react-alert-dialog": "^1.0.5",
     "@radix-ui/react-progress": "^1.1.7",
