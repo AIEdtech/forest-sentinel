@@ -72,6 +72,36 @@ const initializeEE = async () => {
 // Check if EE is already initialized
 let eeInitialized = false;
 
+// Simple in-memory cache for satellite data (5 minute TTL)
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+const dataCache = new Map<string, CacheEntry>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCacheKey(location: any, dataType: string): string {
+  return `${dataType}_${location.lat.toFixed(4)}_${location.lon.toFixed(4)}`;
+}
+
+function getCachedData(key: string): any | null {
+  const entry = dataCache.get(key);
+  if (!entry) return null;
+
+  const age = Date.now() - entry.timestamp;
+  if (age > CACHE_TTL) {
+    dataCache.delete(key);
+    return null;
+  }
+
+  return entry.data;
+}
+
+function setCachedData(key: string, data: any): void {
+  dataCache.set(key, { data, timestamp: Date.now() });
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -242,6 +272,14 @@ async function parseLocation(query: string) {
 }
 
 async function getRealSentinel1Data(location: any) {
+  // Check cache first
+  const cacheKey = getCacheKey(location, 'sentinel1');
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    console.log('📡 Using cached Sentinel-1 data');
+    return cached;
+  }
+
   if (!eeInitialized) {
     if (isProduction) {
       throw new Error('Sentinel-1 data unavailable: Earth Engine not initialized');
@@ -249,7 +287,7 @@ async function getRealSentinel1Data(location: any) {
     // Return realistic demo data if EE not available
     console.log('📡 Using demo Sentinel-1 data (Earth Engine not configured)');
     const isFireZone = location.name && location.name.includes('Fire');
-    return {
+    const data = {
       vv: isFireZone ? -12.5 : -15.2,
       vh: isFireZone ? -28.7 : -22.4,
       vhVvRatio: isFireZone ? -2.3 : -1.47,
@@ -257,6 +295,8 @@ async function getRealSentinel1Data(location: any) {
       lastUpdate: new Date().toISOString(),
       dataSource: 'demo'
     };
+    setCachedData(cacheKey, data);
+    return data;
   }
 
   try {
@@ -306,8 +346,8 @@ async function getRealSentinel1Data(location: any) {
     });
     
     console.log('✅ Real Sentinel-1 data retrieved:', { vv, vh });
-    
-    return {
+
+    const data = {
       vv,
       vh,
       vhVvRatio: vh - vv,
@@ -315,10 +355,12 @@ async function getRealSentinel1Data(location: any) {
       lastUpdate: timestamp as string,
       dataSource: 'real'
     };
-    
+    setCachedData(cacheKey, data);
+    return data;
+
   } catch (error) {
     console.error('Sentinel-1 error:', error);
-    return {
+    const fallbackData = {
       vv: -15,
       vh: -22,
       vhVvRatio: -7,
@@ -326,17 +368,27 @@ async function getRealSentinel1Data(location: any) {
       lastUpdate: new Date().toISOString(),
       dataSource: 'fallback'
     };
+    setCachedData(cacheKey, fallbackData);
+    return fallbackData;
   }
 }
 
 async function getRealModisData(location: any) {
+  // Check cache first
+  const cacheKey = getCacheKey(location, 'modis');
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    console.log('🌱 Using cached MODIS data');
+    return cached;
+  }
+
   if (!eeInitialized) {
     if (isProduction) {
       throw new Error('MODIS data unavailable: Earth Engine not initialized');
     }
     console.log('🌱 Using demo MODIS data (Earth Engine not configured)');
     const isFireZone = location.name && location.name.includes('Fire');
-    return {
+    const data = {
       ndvi: isFireZone ? 0.25 : 0.65,
       evi: isFireZone ? 0.18 : 0.52,
       health: isFireZone ? 'Poor' : 'Good',
@@ -344,6 +396,8 @@ async function getRealModisData(location: any) {
       lastUpdate: new Date().toISOString(),
       dataSource: 'demo'
     };
+    setCachedData(cacheKey, data);
+    return data;
   }
 
   try {
@@ -392,10 +446,10 @@ async function getRealModisData(location: any) {
     // MODIS scale factor is 0.0001
     const ndvi = ((stats as any).NDVI || 5000) * 0.0001;
     const evi = ((stats as any).EVI || 3000) * 0.0001;
-    
+
     console.log('✅ Real MODIS data retrieved:', { ndvi, evi });
-    
-    return {
+
+    const data = {
       ndvi,
       evi,
       health: ndvi > 0.6 ? 'Good' : ndvi > 0.3 ? 'Moderate' : 'Poor',
@@ -403,10 +457,12 @@ async function getRealModisData(location: any) {
       lastUpdate: new Date().toISOString(),
       dataSource: 'real'
     };
-    
+    setCachedData(cacheKey, data);
+    return data;
+
   } catch (error) {
     console.error('MODIS error:', error);
-    return {
+    const fallbackData = {
       ndvi: 0.5,
       evi: 0.4,
       health: 'Moderate',
@@ -414,10 +470,20 @@ async function getRealModisData(location: any) {
       lastUpdate: new Date().toISOString(),
       dataSource: 'fallback'
     };
+    setCachedData(cacheKey, fallbackData);
+    return fallbackData;
   }
 }
 
 async function getRealFirmsData(location: any) {
+  // Check cache first
+  const cacheKey = getCacheKey(location, 'firms');
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    console.log('🔥 Using cached FIRMS data');
+    return cached;
+  }
+
   const mapKey = process.env.NASA_FIRMS_MAP_KEY;
 
   if (!mapKey || mapKey === '') {
@@ -433,28 +499,37 @@ async function getRealFirmsData(location: any) {
     const fires = [];
     const numFires = isFireZone ? 8 : 2;
 
+    // Create deterministic hash from location coordinates
+    const locationSeed = Math.abs(Math.sin(location.lat * 12.9898 + location.lon * 78.233) * 43758.5453);
+    const seededRandom = (index: number) => {
+      const x = Math.sin(index * locationSeed) * 10000;
+      return x - Math.floor(x);
+    };
+
     for (let i = 0; i < numFires; i++) {
       fires.push({
         id: `DEMO_FIRE_${i + 1}`,
-        lat: location.lat + (Math.random() - 0.5) * 0.05,
-        lon: location.lon + (Math.random() - 0.5) * 0.05,
-        brightness: 300 + Math.random() * 100,
+        lat: location.lat + (seededRandom(i * 2) - 0.5) * 0.05,
+        lon: location.lon + (seededRandom(i * 2 + 1) - 0.5) * 0.05,
+        brightness: 300 + seededRandom(i * 3) * 100,
         confidence: isFireZone ? 'high' : 'nominal',
-        frp: 50 + Math.random() * 200,
+        frp: 50 + seededRandom(i * 4) * 200,
         satellite: 'MODIS',
-        detectionTime: new Date(Date.now() - Math.random() * 48 * 3600000).toISOString(),
+        detectionTime: new Date(Date.now() - seededRandom(i * 5) * 48 * 3600000).toISOString(),
         dataSource: 'demo'
       });
     }
 
-    return {
+    const data = {
       fires,
       count: fires.length,
       lastUpdate: new Date().toISOString(),
       dataSource: 'demo'
     };
+    setCachedData(cacheKey, data);
+    return data;
   }
-  
+
   try {
     console.log('🔥 Fetching REAL FIRMS fire data...');
     
@@ -466,16 +541,18 @@ async function getRealFirmsData(location: any) {
     });
     
     const fires = parseFirmsCSV(response.data, location);
-    
+
     console.log(`✅ Real FIRMS data: ${fires.length} fires detected`);
-    
-    return {
+
+    const data = {
       fires: fires.map((f: any) => ({ ...f, dataSource: 'real' })),
       count: fires.length,
       lastUpdate: new Date().toISOString(),
       dataSource: 'real'
     };
-    
+    setCachedData(cacheKey, data);
+    return data;
+
   } catch (error) {
     console.error('FIRMS API error:', error);
     
@@ -490,29 +567,33 @@ async function getRealFirmsData(location: any) {
       // Filter fires near our location
       const nearbyFires = allFires.filter((fire: any) => {
         const dist = Math.sqrt(
-          Math.pow(fire.lat - location.lat, 2) + 
+          Math.pow(fire.lat - location.lat, 2) +
           Math.pow(fire.lon - location.lon, 2)
         );
         return dist < 0.5; // Within ~50km
       });
-      
-      return {
+
+      const publicData = {
         fires: nearbyFires.map((f: any) => ({ ...f, dataSource: 'public' })),
         count: nearbyFires.length,
         lastUpdate: new Date().toISOString(),
         dataSource: 'public'
       };
-      
+      setCachedData(cacheKey, publicData);
+      return publicData;
+
     } catch (publicError) {
       console.error('FIRMS public endpoint error:', publicError);
-      
+
       // Final fallback
-      return {
+      const fallbackData = {
         fires: [],
         count: 0,
         lastUpdate: new Date().toISOString(),
         dataSource: 'unavailable'
       };
+      setCachedData(cacheKey, fallbackData);
+      return fallbackData;
     }
   }
 }
@@ -561,6 +642,14 @@ function parseFirmsCSV(csvData: string, location: any) {
 }
 
 async function getRealWeatherData(location: any) {
+  // Check cache first
+  const cacheKey = getCacheKey(location, 'weather');
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    console.log('⛅ Using cached weather data');
+    return cached;
+  }
+
   const apiKey = process.env.OPENWEATHER_API_KEY;
 
   if (!apiKey) {
@@ -569,7 +658,7 @@ async function getRealWeatherData(location: any) {
     }
     console.log('⛅ Using demo weather data (OpenWeather not configured)');
     const isFireZone = location.name && location.name.includes('Fire');
-    return {
+    const data = {
       temperature: isFireZone ? 32 : 22,
       humidity: isFireZone ? 12 : 45,
       windSpeed: isFireZone ? 45 : 15,
@@ -578,8 +667,10 @@ async function getRealWeatherData(location: any) {
       droughtIndex: isFireZone ? 4.5 : 2.0,
       dataSource: 'demo'
     };
+    setCachedData(cacheKey, data);
+    return data;
   }
-  
+
   try {
     console.log('⛅ Fetching REAL weather data...');
     
@@ -594,10 +685,10 @@ async function getRealWeatherData(location: any) {
     });
     
     const data = response.data;
-    
+
     console.log('✅ Real weather data retrieved');
-    
-    return {
+
+    const weatherData = {
       temperature: data.main.temp,
       humidity: data.main.humidity,
       windSpeed: data.wind.speed * 3.6, // Convert m/s to km/h
@@ -606,10 +697,12 @@ async function getRealWeatherData(location: any) {
       droughtIndex: calculateDroughtIndex(data),
       dataSource: 'real'
     };
-    
+    setCachedData(cacheKey, weatherData);
+    return weatherData;
+
   } catch (error) {
     console.error('Weather API error:', error);
-    return {
+    const fallbackData = {
       temperature: 25,
       humidity: 40,
       windSpeed: 20,
@@ -618,6 +711,8 @@ async function getRealWeatherData(location: any) {
       droughtIndex: 2.5,
       dataSource: 'fallback'
     };
+    setCachedData(cacheKey, fallbackData);
+    return fallbackData;
   }
 }
 
@@ -701,20 +796,22 @@ function calculateRisk(data: any) {
 function generateForecast(riskAnalysis: any, weatherData: any) {
   const forecast = [];
   const baseScore = riskAnalysis.score;
-  
+
   for (let day = 1; day <= 7; day++) {
     const weatherImpact = weatherData.humidity < 30 ? 2 : -1;
     const trendFactor = day * weatherImpact;
-    const randomVariation = Math.random() * 10 - 5;
-    
-    const forecastScore = Math.max(0, Math.min(100, baseScore + trendFactor + randomVariation));
-    
+
+    // Deterministic variation based on day number (sinusoidal pattern)
+    const naturalVariation = Math.sin(day * 0.5) * 3;
+
+    const forecastScore = Math.max(0, Math.min(100, baseScore + trendFactor + naturalVariation));
+
     let level;
     if (forecastScore >= 70) level = 'EXTREME';
     else if (forecastScore >= 50) level = 'HIGH';
     else if (forecastScore >= 30) level = 'MODERATE';
     else level = 'LOW';
-    
+
     forecast.push({
       day,
       date: new Date(Date.now() + day * 24 * 3600000).toISOString(),
@@ -723,7 +820,7 @@ function generateForecast(riskAnalysis: any, weatherData: any) {
       confidence: Math.max(50, 95 - day * 5)
     });
   }
-  
+
   return forecast;
 }
 
@@ -782,33 +879,40 @@ function generateAlerts(riskAnalysis: any, location: any) {
 function generateRiskZones(location: any, riskAnalysis: any) {
   const zones = [];
   const baseRisk = riskAnalysis.score;
-  
-  // Generate realistic risk zones
+
+  // Create deterministic hash from location coordinates
+  const locationSeed = Math.abs(Math.sin(location.lat * 12.9898 + location.lon * 78.233) * 43758.5453);
+  const seededRandom = (index: number) => {
+    const x = Math.sin(index * locationSeed) * 10000;
+    return x - Math.floor(x);
+  };
+
+  // Generate deterministic risk zones
   for (let i = 0; i < 5; i++) {
     const angle = (i * 72) * Math.PI / 180;
-    const distance = 0.02 + Math.random() * 0.03;
-    
+    const distance = 0.02 + seededRandom(i) * 0.03;
+
     const zoneLat = location.lat + distance * Math.cos(angle);
     const zoneLon = location.lon + distance * Math.sin(angle);
-    const zoneRisk = Math.max(0, Math.min(100, baseRisk + (Math.random() - 0.5) * 30));
-    
+    const zoneRisk = Math.max(0, Math.min(100, baseRisk + (seededRandom(i + 10) - 0.5) * 30));
+
     let level;
     if (zoneRisk >= 70) level = 'EXTREME';
     else if (zoneRisk >= 50) level = 'HIGH';
     else if (zoneRisk >= 30) level = 'MODERATE';
     else level = 'LOW';
-    
+
     zones.push({
       id: `ZONE_${i + 1}`,
       center: {
         lat: zoneLat,
         lon: zoneLon
       },
-      radius: 1000 + Math.random() * 4000,
+      radius: 1000 + seededRandom(i + 20) * 4000,
       riskScore: Math.round(zoneRisk),
       riskLevel: level
     });
   }
-  
+
   return zones;
 }
