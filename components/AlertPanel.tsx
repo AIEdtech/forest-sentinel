@@ -143,16 +143,54 @@ export default function AlertPanel({ alerts = [], location }: AlertPanelProps) {
 
   if (!alerts || alerts.length === 0) {
     return (
-      <Card className="border-0 shadow-xl">
-        <CardContent className="p-12 text-center">
-          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">All Clear</h3>
-          <p className="text-gray-600">No active alerts for this location</p>
-          <p className="text-sm text-gray-500 mt-4">
-            Monitoring systems are active and will alert you if conditions change
-          </p>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <Card className="border-0 shadow-xl">
+          <CardContent className="p-12 text-center">
+            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">All Clear</h3>
+            <p className="text-gray-600">No active alerts for this location</p>
+            <p className="text-sm text-gray-500 mt-4">
+              Monitoring systems are active and will alert you if conditions change
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Alert Level Definitions */}
+        <Card className="border-0 shadow-lg">
+          <CardContent className="p-4">
+            <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Alert Level Definitions
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div className="flex items-start gap-2">
+                <div className="w-3 h-3 bg-red-600 rounded-full mt-1 flex-shrink-0"></div>
+                <div>
+                  <strong className="text-red-700">CRITICAL:</strong> Risk score ≥70 (Extreme conditions)
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-3 h-3 bg-orange-600 rounded-full mt-1 flex-shrink-0"></div>
+                <div>
+                  <strong className="text-orange-700">FIRE:</strong> Active fires detected (NASA FIRMS)
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-3 h-3 bg-blue-600 rounded-full mt-1 flex-shrink-0"></div>
+                <div>
+                  <strong className="text-blue-700">WEATHER:</strong> Dangerous fire weather conditions
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-3 h-3 bg-green-600 rounded-full mt-1 flex-shrink-0"></div>
+                <div>
+                  <strong className="text-green-700">VEGETATION:</strong> Severe vegetation stress (NDVI &lt; 0.3)
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -181,6 +219,42 @@ export default function AlertPanel({ alerts = [], location }: AlertPanelProps) {
                 <Share2 className="w-4 h-4 mr-2" />
                 Share
               </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Alert Level Definitions */}
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-4">
+          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" />
+            Alert Level Definitions
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div className="flex items-start gap-2">
+              <div className="w-3 h-3 bg-red-600 rounded-full mt-1 flex-shrink-0"></div>
+              <div>
+                <strong className="text-red-700">CRITICAL:</strong> Risk score ≥70 (Extreme conditions)
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-3 h-3 bg-orange-600 rounded-full mt-1 flex-shrink-0"></div>
+              <div>
+                <strong className="text-orange-700">FIRE:</strong> Active fires detected (NASA FIRMS)
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-3 h-3 bg-blue-600 rounded-full mt-1 flex-shrink-0"></div>
+              <div>
+                <strong className="text-blue-700">WEATHER:</strong> Dangerous fire weather conditions
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-3 h-3 bg-green-600 rounded-full mt-1 flex-shrink-0"></div>
+              <div>
+                <strong className="text-green-700">VEGETATION:</strong> Severe vegetation stress (NDVI &lt; 0.3)
+              </div>
             </div>
           </div>
         </CardContent>

@@ -83,30 +83,77 @@ export default function RiskDashboard({ data }: RiskDashboardProps) {
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <span className={`text-2xl font-bold ${getRiskColor(data.riskAnalysis?.level)}`}>
-                      {data.riskAnalysis?.score || 0}/100
-                    </span>
-                    <div className="flex-1 max-w-xs">
-                      <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-500 ${
-                            data.riskAnalysis?.level === 'EXTREME' ? 'bg-red-600' :
-                            data.riskAnalysis?.level === 'HIGH' ? 'bg-orange-500' :
-                            data.riskAnalysis?.level === 'MODERATE' ? 'bg-yellow-500' :
-                            'bg-green-500'
-                          }`}
-                          style={{ width: `${data.riskAnalysis?.score || 0}%` }}
-                        ></div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <span className={`text-2xl font-bold ${getRiskColor(data.riskAnalysis?.level)}`}>
+                        {data.riskAnalysis?.score || 0}/120
+                      </span>
+                      <div className="flex-1 max-w-xs">
+                        <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-500 ${
+                              data.riskAnalysis?.level === 'EXTREME' ? 'bg-red-600' :
+                              data.riskAnalysis?.level === 'HIGH' ? 'bg-orange-500' :
+                              data.riskAnalysis?.level === 'MODERATE' ? 'bg-yellow-500' :
+                              'bg-green-500'
+                            }`}
+                            style={{ width: `${((data.riskAnalysis?.score || 0) / 120) * 100}%` }}
+                          ></div>
+                        </div>
                       </div>
                     </div>
+                    {data.riskAnalysis?.reasoning?.overall ? (
+                      <div className="text-xs text-slate-600 italic bg-purple-50 p-2 rounded border border-purple-200">
+                        <strong>AI Analysis:</strong> {data.riskAnalysis.reasoning.overall}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-500">
+                        Sum of all factors: Fire Activity (40) + Vegetation Stress (25) + Weather (30) + Structural Change (25)
+                        <br />
+                        Risk Levels: ≥70 EXTREME | 50-69 HIGH | 30-49 MODERATE | &lt;30 LOW
+                      </div>
+                    )}
                   </div>
                 </td>
               </tr>
               <tr className="hover:bg-slate-50 transition-colors">
                 <td className="px-6 py-4 font-semibold text-slate-700">Confidence Level</td>
-                <td className="px-6 py-4 text-slate-900 font-semibold">{data.riskAnalysis?.confidence || 0}%</td>
+                <td className="px-6 py-4">
+                  <div className="space-y-1">
+                    <div className="text-slate-900 font-semibold">{data.riskAnalysis?.confidence || 0}%</div>
+                    {data.riskAnalysis?.reasoning?.confidenceExplanation ? (
+                      <div className="text-xs text-slate-600 italic">
+                        {data.riskAnalysis.reasoning.confidenceExplanation}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-500">
+                        Calculated as: min(95%, 70% + (fire_count × 2%))
+                      </div>
+                    )}
+                  </div>
+                </td>
               </tr>
+              {data.riskAnalysis?.analysisMethod && (
+                <tr className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 font-semibold text-slate-700">Analysis Method</td>
+                  <td className="px-6 py-4">
+                    <Badge className={`${
+                      data.riskAnalysis.analysisMethod === 'llm'
+                        ? 'bg-purple-100 text-purple-800'
+                        : 'bg-slate-100 text-slate-800'
+                    }`}>
+                      {data.riskAnalysis.analysisMethod === 'llm'
+                        ? '🤖 AI-Powered (Claude Sonnet 4.0)'
+                        : '📊 Rule-Based Algorithm'}
+                    </Badge>
+                    {data.riskAnalysis.reasoning?.overall && (
+                      <div className="mt-2 text-sm text-slate-700 bg-slate-50 p-3 rounded border border-slate-200">
+                        <strong>AI Analysis:</strong> {data.riskAnalysis.reasoning.overall}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </CardContent>
@@ -160,7 +207,14 @@ export default function RiskDashboard({ data }: RiskDashboardProps) {
                     <span className="font-semibold text-slate-900">MODIS</span>
                   </div>
                 </td>
-                <td className="px-6 py-4 text-slate-700">NDVI (Vegetation Index)</td>
+                <td className="px-6 py-4 text-slate-700">
+                  <div className="space-y-1">
+                    <div>NDVI (Vegetation Index)</div>
+                    <div className="text-xs text-slate-500 font-normal">
+                      ≥0.6: Healthy | 0.3-0.6: Moderate | &lt;0.3: Poor
+                    </div>
+                  </div>
+                </td>
                 <td className="px-6 py-4">
                   <span className="text-xl font-bold text-green-600">
                     {data.satelliteData?.modis?.ndvi?.toFixed(3) || 'N/A'}
@@ -330,11 +384,17 @@ export default function RiskDashboard({ data }: RiskDashboardProps) {
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Risk Factor</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Score</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Impact</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Explanation</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4 font-semibold text-slate-900">Fire Activity</td>
+              <tr className="border-b hover:bg-orange-50 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <Flame className="w-5 h-5 text-orange-600" />
+                    <span className="font-semibold text-slate-900">Fire Activity</span>
+                  </div>
+                </td>
                 <td className="px-6 py-4">
                   <span className="text-lg font-bold text-orange-600">
                     {data.riskAnalysis?.factors?.fireActivity || 0}/40
@@ -348,9 +408,28 @@ export default function RiskDashboard({ data }: RiskDashboardProps) {
                     ></div>
                   </div>
                 </td>
+                <td className="px-6 py-4 text-sm text-slate-600">
+                  <div className="space-y-1">
+                    <div>
+                      {data.satelliteData?.firms?.count > 10 ? '10+ active fires - Active wildfire event' :
+                       data.satelliteData?.firms?.count > 5 ? '6-10 fires - Major fire activity' :
+                       data.satelliteData?.firms?.count > 2 ? '3-5 fires - Moderate fire activity' :
+                       data.satelliteData?.firms?.count > 0 ? '1-2 fires - Isolated fires' :
+                       'No active fires detected'}
+                    </div>
+                    <div className="text-xs text-slate-500 italic">
+                      Scoring: &gt;10 fires = 40pts | 6-10 = 30pts | 3-5 = 20pts | 1-2 = 10pts | 0 = 0pts
+                    </div>
+                  </div>
+                </td>
               </tr>
-              <tr className="border-b hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4 font-semibold text-slate-900">Vegetation Stress</td>
+              <tr className="border-b hover:bg-green-50 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <TreePine className="w-5 h-5 text-green-600" />
+                    <span className="font-semibold text-slate-900">Vegetation Stress</span>
+                  </div>
+                </td>
                 <td className="px-6 py-4">
                   <span className="text-lg font-bold text-green-600">
                     {data.riskAnalysis?.factors?.vegetationStress || 0}/25
@@ -364,9 +443,29 @@ export default function RiskDashboard({ data }: RiskDashboardProps) {
                     ></div>
                   </div>
                 </td>
+                <td className="px-6 py-4 text-sm text-slate-600">
+                  <div className="space-y-1">
+                    <div>
+                      NDVI {data.satelliteData?.modis?.ndvi?.toFixed(2)}: {
+                        data.satelliteData?.modis?.ndvi < 0.2 ? 'Dead/dying vegetation - extreme fire fuel' :
+                        data.satelliteData?.modis?.ndvi < 0.4 ? 'Stressed vegetation - high fire fuel' :
+                        data.satelliteData?.modis?.ndvi < 0.6 ? 'Moderate health - some fire risk' :
+                        'Healthy vegetation - low fire risk'
+                      }
+                    </div>
+                    <div className="text-xs text-slate-500 italic">
+                      Scoring: NDVI &lt;0.2 = 25pts | 0.2-0.4 = 20pts | 0.4-0.6 = 10pts | ≥0.6 = 5pts
+                    </div>
+                  </div>
+                </td>
               </tr>
-              <tr className="border-b hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4 font-semibold text-slate-900">Weather Conditions</td>
+              <tr className="border-b hover:bg-blue-50 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <Wind className="w-5 h-5 text-blue-600" />
+                    <span className="font-semibold text-slate-900">Weather Conditions</span>
+                  </div>
+                </td>
                 <td className="px-6 py-4">
                   <span className="text-lg font-bold text-blue-600">
                     {data.riskAnalysis?.factors?.weatherConditions || 0}/30
@@ -380,9 +479,30 @@ export default function RiskDashboard({ data }: RiskDashboardProps) {
                     ></div>
                   </div>
                 </td>
+                <td className="px-6 py-4 text-sm text-slate-600">
+                  <div className="space-y-1">
+                    <div>
+                      {data.satelliteData?.weather?.humidity < 20 && data.satelliteData?.weather?.windSpeed > 30
+                        ? 'Red Flag conditions - extreme fire weather' :
+                       data.satelliteData?.weather?.humidity < 30 && data.satelliteData?.weather?.windSpeed > 20
+                        ? 'Critical fire weather conditions' :
+                       data.satelliteData?.weather?.humidity < 40
+                        ? 'Elevated fire risk from dry conditions' :
+                        'Normal weather conditions'}
+                    </div>
+                    <div className="text-xs text-slate-500 italic">
+                      Scoring: H&lt;20% + W&gt;30km/h = 30pts | H&lt;30% + W&gt;20km/h = 25pts | H&lt;40% = 15pts | Normal = 5pts
+                    </div>
+                  </div>
+                </td>
               </tr>
-              <tr className="border-b hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4 font-semibold text-slate-900">Structural Change (SAR)</td>
+              <tr className="hover:bg-purple-50 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <Radio className="w-5 h-5 text-purple-600" />
+                    <span className="font-semibold text-slate-900">Structural Change</span>
+                  </div>
+                </td>
                 <td className="px-6 py-4">
                   <span className="text-lg font-bold text-purple-600">
                     {data.riskAnalysis?.factors?.structuralChange || 0}/25
@@ -396,20 +516,19 @@ export default function RiskDashboard({ data }: RiskDashboardProps) {
                     ></div>
                   </div>
                 </td>
-              </tr>
-              <tr className="hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4 font-semibold text-slate-900">Accessibility</td>
-                <td className="px-6 py-4">
-                  <span className="text-lg font-bold text-slate-600">
-                    {data.riskAnalysis?.factors?.accessibility || 0}/5
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="h-2 bg-slate-200 rounded-full overflow-hidden w-32">
-                    <div
-                      className="h-full bg-slate-500"
-                      style={{ width: `${((data.riskAnalysis?.factors?.accessibility || 0) / 5) * 100}%` }}
-                    ></div>
+                <td className="px-6 py-4 text-sm text-slate-600">
+                  <div className="space-y-1">
+                    <div>
+                      SAR VH/VV {data.satelliteData?.sar?.vhVvRatio?.toFixed(1)}dB: {
+                        data.satelliteData?.sar?.vhVvRatio < -8 ? 'Major structural change - clear-cutting/severe damage' :
+                        data.satelliteData?.sar?.vhVvRatio < -6 ? 'Moderate disturbance - logging/thinning detected' :
+                        data.satelliteData?.sar?.vhVvRatio < -4 ? 'Minor changes - selective logging' :
+                        'Intact forest structure'
+                      }
+                    </div>
+                    <div className="text-xs text-slate-500 italic">
+                      Scoring: VH/VV &lt;-8dB = 25pts | -8 to -6dB = 20pts | -6 to -4dB = 10pts | ≥-4dB = 5pts
+                    </div>
                   </div>
                 </td>
               </tr>
