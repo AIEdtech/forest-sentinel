@@ -8,7 +8,8 @@
     "EE_SERVICE_ACCOUNT": "@ee_service_account",
     "EE_PRIVATE_KEY": "@ee_private_key",
     "NASA_FIRMS_MAP_KEY": "@nasa_firms_key",
-    "OPENWEATHER_API_KEY": "@openweather_key"
+    "OPENWEATHER_API_KEY": "@openweather_key",
+    "NASA_EARTHDATA_TOKEN": "@nasa_earthdata_token"
   },
   "functions": {
     "pages/api/search.ts": {
