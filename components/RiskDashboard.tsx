@@ -66,17 +66,13 @@ export default function RiskDashboard({ data }: RiskDashboardProps) {
                     Location
                   </div>
                 </td>
-                <td className="px-6 py-4 text-slate-900">{data.location?.name}</td>
-              </tr>
-              <tr className="border-b hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4 font-semibold text-slate-700">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-slate-600" />
-                    Coordinates
+                <td className="px-6 py-4 text-slate-900">
+                  <div className="space-y-1">
+                    <div className="font-semibold">{data.location?.name}</div>
+                    <div className="font-mono text-sm text-slate-600">
+                      {data.location?.lat.toFixed(4)}°, {data.location?.lon.toFixed(4)}°
+                    </div>
                   </div>
-                </td>
-                <td className="px-6 py-4 text-slate-900 font-mono text-sm">
-                  {data.location?.lat.toFixed(4)}°, {data.location?.lon.toFixed(4)}°
                 </td>
               </tr>
               <tr className="border-b hover:bg-slate-50 transition-colors">
