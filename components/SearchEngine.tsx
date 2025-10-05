@@ -8,7 +8,7 @@ interface SearchEngineProps {
 }
 
 export default function SearchEngine({ onSearch }: SearchEngineProps) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState('Fremont, California');
   const [isSearching, setIsSearching] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
@@ -78,6 +78,7 @@ export default function SearchEngine({ onSearch }: SearchEngineProps) {
                      bg-white/90 backdrop-blur-sm"
             disabled={isSearching}
             autoComplete="off"
+            readOnly
           />
 
           <div className="absolute left-5 top-1/2 -translate-y-1/2 p-2 bg-green-50 rounded-full">
@@ -85,16 +86,6 @@ export default function SearchEngine({ onSearch }: SearchEngineProps) {
           </div>
 
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={getCurrentLocation}
-              className="p-3 text-gray-500 hover:text-green-600 hover:bg-green-50
-                       rounded-full transition-all duration-200"
-              title="Use current location"
-            >
-              <Navigation className="w-5 h-5" />
-            </button>
-
             <button
               type="submit"
               disabled={isSearching || !query.trim()}
